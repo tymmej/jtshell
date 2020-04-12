@@ -8,6 +8,7 @@ typedef struct {
     char **tokens;
 } jt_shell_cmd_t;
 
+//TODO redirect only works for all groups
 typedef struct {
     char *stdin;
     char *stdout;

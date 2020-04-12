@@ -5,6 +5,7 @@
 #include "jt_logger.h"
 
 #include <assert.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@ jt_shell_line_get(void)
             jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
                           "%s\n",
                           "Line get EOF");
+            free(line);
             return NULL;
         } else if (c =='\n') {
             line[line_len] = '\0';
@@ -66,7 +68,6 @@ jt_shell_line_get(void)
 static int
 jt_shell_exec_single(char **cmd)
 {
-    int status;
 
     jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
                     "%s: %s\n",
@@ -117,12 +118,27 @@ jt_shell_exec(char *line)
         int tmpin = dup(0);
         int tmpout = dup(1);
         int fdout;
-        int fdin = dup(tmpin);
+        int fdin;
+        if (cmds->stdin) {
+            jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
+                          "%s: %s\n", "stdin", cmds->stdin);
+            fdin = open(cmds->stdin, O_RDONLY);
+            //TODO check error
+        } else {
+            fdin = dup(tmpin);
+        }
         do {
             dup2(fdin, 0);
             close(fdin);
             if (NULL == cmd->next) {
-                fdout = dup(tmpout);
+                if (cmds->stdout) {
+                    jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
+                                "%s: %s\n", "stdout", cmds->stdout);
+                    fdout = creat(cmds->stdout, 0644);
+                    //TODO check error
+                } else {
+                    fdout = dup(tmpout);
+                }
             } else {
                 int fdpipe[2];
                 pipe(fdpipe);
@@ -138,14 +154,33 @@ jt_shell_exec(char *line)
         dup2(tmpout, 1);
         close(tmpin);
         close(tmpout);
-        int status;
-        do {
-            waitpid(res, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        if (res >= 0) {
+            int status;
+            do {
+                waitpid(res, &status, WUNTRACED);
+            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        } else if (res < 0) {
+            break;
+        }
         group++;
         cmd = cmds->cmds[group];
     }
-    return 0;
+
+    jt_shell_cmd_t *cmd_temp;
+    for (group = 0; group < cmds->group_cnt; group++) {
+        cmd = cmds->cmds[group];
+        do {
+            free(cmd->tokens);
+            cmd_temp = cmd;
+            cmd = cmd->next;
+            free(cmd_temp);
+        } while (cmd);
+        
+    }
+    free(cmds->cmds);
+    free(cmds);
+
+    return res > 0 ? 0 : -1;
 }
 
 int

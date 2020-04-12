@@ -61,6 +61,5 @@ static int
 jt_shell_builtin_exit(char **args)
 {
     UNUSED(args);
-    exit(0);
-    return 0;
+    return -1;
 }
