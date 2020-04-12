@@ -15,18 +15,39 @@ jt_shell_tokenize(char *line)
     jt_shell_cmds_t *cmds = malloc(sizeof(jt_shell_cmds_t));
     cmds->cmds = malloc(JT_SHELL_CMDS_COUNT * sizeof(jt_shell_cmd_t *));
 
-    size_t cmd_count = 0;
+    size_t group_cnt = 0;
     size_t args_cnt;
     size_t args_sz;
     char **args;
     char *arg_start;
 
+    bool new_group = true;
     bool new_cmd = true;
 
-    do {
-        if (new_cmd) {
-            cmds->cmds[cmd_count] = malloc(sizeof(jt_shell_cmd_t));
+    jt_shell_cmd_t *cur_cmd;
 
+    do {
+        if (new_group) {
+            // cmds->cmds[group_count] = malloc(sizeof(jt_shell_cmd_t));
+            // cur_cmd = cmds->cmds[group_count];
+            // cur_cmd->prev = NULL;
+            // cur_cmd->next = NULL;
+            new_cmd = true;
+            group_cnt++;
+        }
+        if (new_cmd) {
+            if (new_group) {
+                cur_cmd = malloc(sizeof(jt_shell_cmd_t));
+                cmds->cmds[group_cnt - 1] = cur_cmd;
+                cur_cmd->prev = NULL;
+                cur_cmd->next = NULL;
+            } else {
+                cur_cmd->next = malloc(sizeof(jt_shell_cmd_t));
+                ((jt_shell_cmd_t *)cur_cmd->next)->prev = cur_cmd;
+                cur_cmd = cur_cmd->next;
+                cur_cmd->next = NULL;
+            }
+            
             args_cnt = JT_SHELL_ARGS_COUNT;
             args_sz = 0;
             args = malloc(args_cnt * sizeof(char *));
@@ -40,8 +61,9 @@ jt_shell_tokenize(char *line)
             
             arg_start = line;
 
-            cmds->cmds[cmd_count]->tokens = args;
+            cur_cmd->tokens = args;
             new_cmd = false;
+            new_group = false;
         }
 
         //for loop is strtok implementation
@@ -72,25 +94,37 @@ jt_shell_tokenize(char *line)
         if (';' == *line) {
             *line = '\0';
             args[args_sz++] = arg_start;
+            new_group = true;
+            jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
+                                args);
+            jt_logger_log(JT_LOGGER_LEVEL_ERROR,
+                        "%s\n",
+                        "new group");
+        }
+
+        if ('|' == *line) {
+            *line = '\0';
+            args[args_sz++] = arg_start;
             new_cmd = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                                 args);
-            cmd_count++;
+            jt_logger_log(JT_LOGGER_LEVEL_ERROR,
+                        "%s\n",
+                        "new group");
         }
 
     } while (*(++line));
 
-    cmd_count++;
     args[args_sz++] = arg_start;
 
-    cmds->cmd_cnt = cmd_count;
+    cmds->group_cnt = group_cnt;
 
     jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                         args);
 
-    jt_logger_log(JT_LOGGER_LEVEL_ERROR,
-                "%s %d\n",
-                "Command found", cmds->cmd_cnt);
+    jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
+                  "%s %d\n",
+                  "Commands found", cmds->group_cnt);
 
     return cmds;
 }

@@ -109,13 +109,21 @@ jt_shell_exec(char *line)
     }
     
     int res;
-    size_t i = 0;
-    do {
-        jt_shell_cmd_t *cmd = cmds->cmds[i];
-        res = jt_shell_exec_single(cmd->tokens);
-        i++;
-    } while (i < cmds->cmd_cnt && 0 == res);
+    size_t group = 0;
+    jt_shell_cmd_t *cmd = cmds->cmds[group];
 
+    while (group < cmds->group_cnt) {
+        do {
+            res = jt_shell_exec_single(cmd->tokens);
+            if (NULL != cmd->next) {
+                cmd = cmd->next;
+            } else {
+                break;
+            }
+        } while (0 == res);
+        group++;
+        cmd = cmds->cmds[group];
+    }
     return res;
 }
 
@@ -126,7 +134,7 @@ jt_shell(int argc, char *argv[])
     UNUSED(argv);
 
     jt_logger_init(JT_LOGGER_LEVEL_DEBUG);
-    jt_logger_init(JT_LOGGER_LEVEL_WARN);
+    //jt_logger_init(JT_LOGGER_LEVEL_WARN);
 
     for (;;) {
         int res = jt_shell_prompt_print();

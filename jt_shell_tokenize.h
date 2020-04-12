@@ -3,13 +3,15 @@
 #include <unistd.h>
 
 typedef struct {
+    void *prev;
+    void *next;
     char **tokens;
 } jt_shell_cmd_t;
 
 typedef struct {
     char *stdin;
     char *stdout;
-    size_t cmd_cnt;
+    size_t group_cnt;
     jt_shell_cmd_t **cmds;
 } jt_shell_cmds_t;
 
