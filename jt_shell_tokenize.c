@@ -90,7 +90,6 @@ jt_shell_tokenize(char *line)
 
         //for loop is strtok implementation
         for (const char *c = delims; '\0' != *c; c++) {
-            //TODO commands starting with delim
             if (*c == *line && *(line - 1) != '\0') {
                 *line = '\0';
                 if (!jt_shell_tokenize_arg_is_empty(arg_start)) {
