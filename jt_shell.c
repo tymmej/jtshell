@@ -1,116 +1,18 @@
 #include "jt_shell.h"
 #include "jt_shell_builtins.h"
+#include "jt_shell_prompt.h"
+#include "jt_shell_tokenize.h"
 #include "jt_logger.h"
 
 #include <assert.h>
-#include <errno.h>
-#include <pwd.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-
 #include <sys/types.h>
 #include <sys/wait.h>
-
-static const char *jt_shell_prompt_text = "jtshell>";
-
-typedef enum {
-    USER = 1,
-    HOSTNAME,
-} jt_shell_get_t;
-
-static char *
-jt_shell_get_info(jt_shell_get_t type)
-{
-    char *line_buf = NULL;
-
-    switch (type) {
-        case USER:
-            {
-            char buffer[1024];
-            struct passwd pwd;
-            struct passwd *result;
-            int res = getpwuid_r(getuid(),
-                                 &pwd,
-                                 buffer,
-                                 sizeof(buffer),
-                                 &result);
-            if (0 == res || NULL != result) {
-                line_buf = malloc(strlen(pwd.pw_name) + 1);
-                if (NULL == line_buf) {
-                    jt_logger_log(JT_LOGGER_LEVEL_ERROR,
-                                  "%s\n",
-                                  "Cannot username allocate");
-                }
-                strcpy(line_buf, pwd.pw_name);
-            }
-            }
-            break;
-        case HOSTNAME:
-            {
-            size_t line_sz = JT_SHELL_LINE_SIZE;
-            line_buf = malloc(line_sz);
-            int res;
-            do {
-                if (NULL == line_buf) {
-                    jt_logger_log(JT_LOGGER_LEVEL_ERROR,
-                                  "%s\n",
-                                  "Cannot hostname allocate");
-                    return NULL;
-                }
-                res = gethostname(line_buf, line_sz);
-                if (res != ENAMETOOLONG) {
-                    break;
-                }
-                free(line_buf);
-                line_sz += JT_SHELL_LINE_SIZE;
-                malloc(line_sz);
-            } while (true);
-            }
-            break;
-        default:
-            jt_logger_log(JT_LOGGER_LEVEL_ERROR,
-                          "%s\n",
-                          "Unknown type");
-            return NULL;
-    }
-
-    jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
-                  "%s: %s\n",
-                  "prompt", line_buf);
-    return line_buf;
-}
-
-static int
-jt_shell_prompt_print(void)
-{
-    char *hostname_buf;
-    char *username_buf;
-
-    hostname_buf = jt_shell_get_info(HOSTNAME);
-
-    if (NULL == hostname_buf) {
-        free(hostname_buf);
-        return -1;
-    }
-    username_buf = jt_shell_get_info(USER);
-
-    if (NULL == username_buf) {
-        free(username_buf);
-        return -1;
-    }
-    
-    printf("[%s@%s] %s", username_buf, hostname_buf, jt_shell_prompt_text);
-
-    free(hostname_buf);
-    free(username_buf);
-    
-    return 0;
-}
-
 
 char *
 jt_shell_line_get(void)
@@ -161,96 +63,60 @@ jt_shell_line_get(void)
     }
 }
 
-static char **
-jt_shell_args_split(char *line)
-{
-    const char *delims = JT_SHELL_TOKEN_DELIM;
-    size_t args_cnt = JT_SHELL_ARGS_COUNT;
-    size_t args_sz = 0;
-    char **args = malloc(args_cnt * sizeof(char *));
-    char *arg_start = line;
-
-    if (NULL == args) {
-        jt_logger_log(JT_LOGGER_LEVEL_ERROR,
-                    "%s\n",
-                    "Args split cannot alloc");
-        return NULL;
-    }
-
-    while (*line) {
-        //for loop is strtok implementation
-        for (const char *c = delims; '\0' != *c; c++) {
-            if (*c == *line) {
-                args[args_sz++] = arg_start;
-                arg_start = line + 1;
-                *line = '\0';
-                if (args_cnt >= args_sz) {
-                    args_cnt += JT_SHELL_ARGS_COUNT;
-                    args = realloc(args, args_cnt * sizeof(char *));
-                    if (NULL == args) {
-                        jt_logger_log(JT_LOGGER_LEVEL_ERROR,
-                                    "%s\n",
-                                    "Args split cannot realloc");
-                        return NULL;
-                    }
-                }
-                break;
-            }
-        }
-
-        line++;
-    }
-    args[args_sz++] = arg_start;
-
-    jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
-                        args);
-
-    return args;
-}
-
 static int
-jt_shell_exec(char *line)
+jt_shell_exec_single(char **cmd)
 {
     int status;
+    jt_shell_builtin_func_t func = jt_shell_builtin_check(cmd[0]);
 
-    char **args = jt_shell_args_split(line);
-
-    if (NULL == args) {
-        jt_logger_log(JT_LOGGER_LEVEL_ERROR,
-                        "%s\n",
-                        "Error splitting line");
-        return -2;
-    }
-
-    jt_shell_builtin_func_t func = jt_shell_builtin_check(args[0]);
     if (func) {
-        return func(args);
+        return func(cmd);
     }
 
     pid_t pid = fork();
 
     if (0 == pid) {
-        if (execvp(args[0], args) == -1) {
+        if (execvp(cmd[0], cmd) == -1) {
             jt_logger_log(JT_LOGGER_LEVEL_ERROR,
                           "%s: %s\n",
-                          "Error executing cmd", args[0]);
-            free(args);
-            return -1;
+                          "Error executing cmd", cmd[0]);
+            exit(EXIT_FAILURE);
         }
-        return 0;
+        exit(0);
     } else if (0 > pid) {
         jt_logger_log(JT_LOGGER_LEVEL_ERROR,
                         "%s\n",
                         "Error executing cmd, could not fork");
-        free(args);
         return -2;    
     } else {
         do {
             waitpid(pid, &status, WUNTRACED);
         } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-        free(args);
         return 0;
     }
+}
+
+static int
+jt_shell_exec(char *line)
+{
+    jt_shell_cmds_t *cmds = jt_shell_tokenize(line);
+
+    if (NULL == cmds) {
+        jt_logger_log(JT_LOGGER_LEVEL_ERROR,
+                        "%s\n",
+                        "Error splitting line");
+        return -2;
+    }
+    
+    int res;
+    size_t i = 0;
+    do {
+        jt_shell_cmd_t *cmd = cmds->cmds[i];
+        res = jt_shell_exec_single(cmd->tokens);
+        i++;
+    } while (i < cmds->cmd_cnt && 0 == res);
+
+    return res;
 }
 
 int
