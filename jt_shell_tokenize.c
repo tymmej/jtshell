@@ -7,6 +7,32 @@
 #include <string.h>
 #include <unistd.h>
 
+
+#include "stdio.h"
+
+static bool
+jt_shell_tokenize_arg_is_empty(const char *arg)
+{
+
+    while (*arg) {
+        bool match = false;
+
+        for (const char *c = JT_SHELL_TOKEN_DELIM; '\0' != *c; c++) {
+            if (*arg == *c) {
+                match = true;
+                break;
+            }
+        }
+        if (!match) {
+            return false;
+        }
+
+        arg++;
+    }
+    
+    return true;
+}
+
 jt_shell_cmds_t *
 jt_shell_tokenize(char *line)
 {
@@ -28,10 +54,6 @@ jt_shell_tokenize(char *line)
 
     do {
         if (new_group) {
-            // cmds->cmds[group_count] = malloc(sizeof(jt_shell_cmd_t));
-            // cur_cmd = cmds->cmds[group_count];
-            // cur_cmd->prev = NULL;
-            // cur_cmd->next = NULL;
             new_cmd = true;
             group_cnt++;
         }
@@ -70,9 +92,11 @@ jt_shell_tokenize(char *line)
         for (const char *c = delims; '\0' != *c; c++) {
             //TODO commands starting with delim
             if (*c == *line && *(line - 1) != '\0') {
-                args[args_sz++] = arg_start;
-                arg_start = line + 1;
                 *line = '\0';
+                if (!jt_shell_tokenize_arg_is_empty(arg_start)) {
+                    args[args_sz++] = arg_start;
+                }
+                arg_start = line + 1;
                 if (args_cnt >= args_sz) {
                     args_cnt += JT_SHELL_ARGS_COUNT;
                     args = realloc(args, args_cnt * sizeof(char *));
@@ -93,7 +117,9 @@ jt_shell_tokenize(char *line)
 
         if (';' == *line) {
             *line = '\0';
-            args[args_sz++] = arg_start;
+            if (!jt_shell_tokenize_arg_is_empty(arg_start)) {
+                args[args_sz++] = arg_start;
+            }
             new_group = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                                 args);
@@ -104,18 +130,22 @@ jt_shell_tokenize(char *line)
 
         if ('|' == *line) {
             *line = '\0';
-            args[args_sz++] = arg_start;
+            if (!jt_shell_tokenize_arg_is_empty(arg_start)) {
+                args[args_sz++] = arg_start;
+            }
             new_cmd = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                                 args);
             jt_logger_log(JT_LOGGER_LEVEL_ERROR,
                         "%s\n",
-                        "new group");
+                        "new cmd");
         }
 
     } while (*(++line));
 
-    args[args_sz++] = arg_start;
+    if (!jt_shell_tokenize_arg_is_empty(arg_start)) {
+        args[args_sz++] = arg_start;
+    }
 
     cmds->group_cnt = group_cnt;
 
@@ -124,7 +154,7 @@ jt_shell_tokenize(char *line)
 
     jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
                   "%s %d\n",
-                  "Commands found", cmds->group_cnt);
+                  "Groups found", cmds->group_cnt);
 
     return cmds;
 }

@@ -67,8 +67,12 @@ static int
 jt_shell_exec_single(char **cmd)
 {
     int status;
-    jt_shell_builtin_func_t func = jt_shell_builtin_check(cmd[0]);
 
+    jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
+                    "%s: %s\n",
+                    "Executing cmd", cmd[0]);
+
+    jt_shell_builtin_func_t func = jt_shell_builtin_check(cmd[0]);
     if (func) {
         return func(cmd);
     }
@@ -89,10 +93,7 @@ jt_shell_exec_single(char **cmd)
                         "Error executing cmd, could not fork");
         return -2;    
     } else {
-        do {
-            waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-        return 0;
+        return pid;
     }
 }
 
@@ -113,18 +114,38 @@ jt_shell_exec(char *line)
     jt_shell_cmd_t *cmd = cmds->cmds[group];
 
     while (group < cmds->group_cnt) {
+        int tmpin = dup(0);
+        int tmpout = dup(1);
+        int fdout;
+        int fdin = dup(tmpin);
         do {
-            res = jt_shell_exec_single(cmd->tokens);
-            if (NULL != cmd->next) {
-                cmd = cmd->next;
+            dup2(fdin, 0);
+            close(fdin);
+            if (NULL == cmd->next) {
+                fdout = dup(tmpout);
             } else {
-                break;
+                int fdpipe[2];
+                pipe(fdpipe);
+                fdout = fdpipe[1];
+                fdin = fdpipe[0];
             }
-        } while (0 == res);
+            dup2(fdout, 1);
+            close(fdout);
+            res = jt_shell_exec_single(cmd->tokens);
+            cmd = cmd->next;
+        } while (cmd);
+        dup2(tmpin, 0);
+        dup2(tmpout, 1);
+        close(tmpin);
+        close(tmpout);
+        int status;
+        do {
+            waitpid(res, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
         group++;
         cmd = cmds->cmds[group];
     }
-    return res;
+    return 0;
 }
 
 int
