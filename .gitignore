@@ -1,0 +1,4 @@
+.vscode
+.gdb_history
+*.o
+jtshell
