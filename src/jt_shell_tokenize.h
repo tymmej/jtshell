@@ -10,8 +10,8 @@ typedef struct {
 
 //TODO redirect only works for all groups
 typedef struct {
-    char *stdin;
-    char *stdout;
+    char *redirect_in;
+    char *redirect_out;
     size_t group_cnt;
     jt_shell_cmd_t **cmds;
 } jt_shell_cmds_t;

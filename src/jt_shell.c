@@ -119,10 +119,10 @@ jt_shell_exec(char *line)
         int tmpout = dup(1);
         int fdout;
         int fdin;
-        if (cmds->stdin) {
+        if (cmds->redirect_in) {
             jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
-                          "%s: %s\n", "stdin", cmds->stdin);
-            fdin = open(cmds->stdin, O_RDONLY);
+                          "%s: %s\n", "stdin", cmds->redirect_in);
+            fdin = open(cmds->redirect_in, O_RDONLY);
             //TODO check error
         } else {
             fdin = dup(tmpin);
@@ -131,10 +131,10 @@ jt_shell_exec(char *line)
             dup2(fdin, 0);
             close(fdin);
             if (NULL == cmd->next) {
-                if (cmds->stdout) {
+                if (cmds->redirect_out) {
                     jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
-                                "%s: %s\n", "stdout", cmds->stdout);
-                    fdout = creat(cmds->stdout, 0644);
+                                "%s: %s\n", "stdout", cmds->redirect_out);
+                    fdout = creat(cmds->redirect_out, 0644);
                     //TODO check error
                 } else {
                     fdout = dup(tmpout);

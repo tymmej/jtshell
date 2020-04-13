@@ -43,10 +43,10 @@ jt_shell_tokenice_arg_end(char *arg,
 {
     if (!jt_shell_tokenize_arg_is_empty(arg)) {
         if (*in) {
-            group[group_cnt - 1].stdin = arg;
+            group[group_cnt - 1].redirect_in = arg;
             *in = false;
         } else if (*out) {
-            group[group_cnt - 1].stdout = arg;
+            group[group_cnt - 1].redirect_out = arg;
             *out = false;
         } else {
             cur_cmd->tokens[(*args_sz)++] = arg;
