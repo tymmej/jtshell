@@ -111,6 +111,7 @@ jt_shell_exec(char *line)
     }
     
     int res;
+    int status = 0;
     size_t group = 0;
     jt_shell_cmd_t *cmd = cmds->cmds[group];
 
@@ -155,10 +156,11 @@ jt_shell_exec(char *line)
         close(tmpin);
         close(tmpout);
         if (res >= 0) {
-            int status;
             do {
                 waitpid(res, &status, WUNTRACED);
             } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+            status = WEXITSTATUS(status);
+            jt_logger_log(JT_LOGGER_LEVEL_DEBUG, "%s: %d\n", "Status", status);
         } else if (res < 0) {
             break;
         }
@@ -180,7 +182,7 @@ jt_shell_exec(char *line)
     free(cmds->cmds);
     free(cmds);
 
-    return res > 0 ? 0 : -1;
+    return status;
 }
 
 int
