@@ -1,4 +1,5 @@
 .vscode
 .gdb_history
-*.o
-jtshell
+obj/
+bin/
+

@@ -126,7 +126,7 @@ jt_shell(int argc, char *argv[])
     UNUSED(argv);
 
     jt_logger_init(JT_LOGGER_LEVEL_DEBUG);
-    jt_logger_init(JT_LOGGER_LEVEL_WARN);
+    //jt_logger_init(JT_LOGGER_LEVEL_WARN);
 
     for (;;) {
         int res = jt_shell_prompt_print();

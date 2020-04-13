@@ -88,7 +88,7 @@ jt_shell_tokenize(char *line)
     jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                         args);
 
-    jt_logger_log(JT_LOGGER_LEVEL_ERROR,
+    jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
                 "%s %d\n",
                 "Command found", cmds->cmd_cnt);
 
