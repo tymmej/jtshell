@@ -63,10 +63,10 @@ jt_shell_tokenize(char *line)
     cmds->cmds = malloc(JT_SHELL_CMDS_COUNT * sizeof(jt_shell_cmd_t *));
 
     size_t group_cnt = 0;
-    size_t args_cnt;
+    size_t args_cnt = 0;
     size_t args_sz;
-    char **args;
-    char *arg_start;
+    char **args = NULL;
+    char *arg_start = NULL;
 
     bool new_group = true;
     bool new_cmd = true;
@@ -74,20 +74,19 @@ jt_shell_tokenize(char *line)
     bool redirect_in = false;
     bool redirect_out = false;
 
-    jt_shell_cmd_t *cur_cmd;
+    jt_shell_cmd_t *cur_cmd = NULL;
 
     do {
         if (new_group) {
             new_cmd = true;
             group_cnt++;
+            cur_cmd = malloc(sizeof(jt_shell_cmd_t));
+            cmds->cmds[group_cnt - 1] = cur_cmd;
+            cur_cmd->prev = NULL;
+            cur_cmd->next = NULL;
         }
         if (new_cmd) {
-            if (new_group) {
-                cur_cmd = malloc(sizeof(jt_shell_cmd_t));
-                cmds->cmds[group_cnt - 1] = cur_cmd;
-                cur_cmd->prev = NULL;
-                cur_cmd->next = NULL;
-            } else {
+            if (!new_group) {
                 cur_cmd->next = malloc(sizeof(jt_shell_cmd_t));
                 ((jt_shell_cmd_t *)cur_cmd->next)->prev = cur_cmd;
                 cur_cmd = cur_cmd->next;

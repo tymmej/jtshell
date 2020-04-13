@@ -2,6 +2,7 @@
 #include "jt_shell.h"
 #include "jt_logger.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <pwd.h>
@@ -35,6 +36,7 @@ jt_shell_get_info(jt_shell_get_t type)
                                  sizeof(buffer),
                                  &result);
             if (0 == res || NULL != result) {
+                assert(strlen(pwd.pw_name) + 1 < sizeof(buffer));
                 line_buf = malloc(strlen(pwd.pw_name) + 1);
                 if (NULL == line_buf) {
                     jt_logger_log(JT_LOGGER_LEVEL_ERROR,
@@ -63,7 +65,7 @@ jt_shell_get_info(jt_shell_get_t type)
                 }
                 free(line_buf);
                 line_sz += JT_SHELL_LINE_SIZE;
-                malloc(line_sz);
+                line_buf = malloc(line_sz);
             } while (true);
             }
             break;
