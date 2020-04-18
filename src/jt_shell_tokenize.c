@@ -83,6 +83,8 @@ jt_shell_tokenice_arg_end(jt_shell_tokenize_ctx_t *ctx)
         return;
     }
     
+    jt_shell_tokenize_ctx.arg_active = false;
+    
     if (ctx->redirect_in) {
         ctx->cmds[ctx->group_cnt - 1].redirect_in = ctx->arg_start;
         ctx->redirect_in = false;
@@ -185,7 +187,6 @@ jt_shell_tokenize(char *line)
         case PIPE:
             *line = '\0';
             jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
-            jt_shell_tokenize_ctx.arg_start = line + 1;
             jt_shell_tokenize_ctx.new_cmd = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                                 jt_shell_tokenize_ctx.args);
@@ -196,19 +197,16 @@ jt_shell_tokenize(char *line)
         case SREDNIK:
             *line = '\0';
             jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
-            jt_shell_tokenize_ctx.arg_start = line + 1;
             jt_shell_tokenize_ctx.new_group = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                                 jt_shell_tokenize_ctx.args);
             jt_logger_log(JT_LOGGER_LEVEL_ERROR,
                         "%s\n",
                         "new group");
-            jt_shell_tokenize_ctx.arg_active = false;
             break;
         case REDIRECT_IN:
             *line = '\0';
             jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
-            jt_shell_tokenize_ctx.arg_start = line + 1;
             jt_shell_tokenize_ctx.redirect_in = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                                 jt_shell_tokenize_ctx.args);
@@ -219,7 +217,6 @@ jt_shell_tokenize(char *line)
         case REDIRECT_OUT:
             *line = '\0';
             jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
-            jt_shell_tokenize_ctx.arg_start = line + 1;
             jt_shell_tokenize_ctx.redirect_out = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
                                 jt_shell_tokenize_ctx.args);
