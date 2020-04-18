@@ -22,6 +22,24 @@ typedef enum {
 } jt_shell_tokenize_type_t;
 
 typedef struct {
+    size_t group_cnt;
+    size_t args_cnt;
+    size_t args_sz;
+    char **args;
+    char *arg_start;
+
+    bool new_group;
+    bool new_cmd;
+
+    bool redirect_in;
+    bool redirect_out;
+    
+    jt_shell_cmds_t *cmds;
+    
+    jt_shell_cmd_t *cur_cmd;
+
+    jt_shell_tokenize_type_t token;
+    
     bool in_quote;
     bool redirect_active;
     bool arg_active;
@@ -58,21 +76,35 @@ jt_shell_tokenize_get_token(char ch)
 }
 
 void
-jt_shell_tokenice_arg_end(char *arg,
-                          jt_shell_cmds_t *group,
-                          jt_shell_cmd_t *cur_cmd,
-                          size_t group_cnt,
-                          size_t *args_cnt,
-                          bool *in, bool *out)
+jt_shell_tokenice_arg_end(jt_shell_tokenize_ctx_t *ctx)
 {
-    if (*in) {
-        group[group_cnt - 1].redirect_in = arg;
-        *in = false;
-    } else if (*out) {
-        group[group_cnt - 1].redirect_out = arg;
-        *out = false;
+    
+    if (!jt_shell_tokenize_ctx.arg_active) {
+        return;
+    }
+    
+    if (ctx->redirect_in) {
+        ctx->cmds[ctx->group_cnt - 1].redirect_in = ctx->arg_start;
+        ctx->redirect_in = false;
+    } else if (ctx->redirect_out) {
+        ctx->cmds[ctx->group_cnt - 1].redirect_out = ctx->arg_start;
+        ctx->redirect_out = false;
     } else {
-        cur_cmd->tokens[(*args_cnt)++] = arg;
+        ctx->cur_cmd->tokens[(ctx->args_cnt)++] = ctx->arg_start;
+    }
+    
+    if (ctx->args_cnt >= ctx->args_sz) {
+        ctx->args_sz += JT_SHELL_ARGS_COUNT;
+        ctx->args = realloc(ctx->args, ctx->args_sz * sizeof(char *));
+        ctx->args[ctx->args_cnt] = NULL;
+        ctx->cur_cmd->tokens = ctx->args;
+        if (NULL == ctx->args) {
+            jt_logger_log(JT_LOGGER_LEVEL_ERROR,
+                        "%s\n",
+                        "Args split cannot realloc");
+            //return NULL;
+            exit(1);
+        }
     }
 }
 
@@ -80,74 +112,54 @@ jt_shell_cmds_t *
 jt_shell_tokenize(char *line)
 {
 
-    jt_shell_cmds_t *cmds = calloc(sizeof(jt_shell_cmds_t), 1);
-    cmds->cmds = malloc(JT_SHELL_CMDS_COUNT * sizeof(jt_shell_cmd_t *));
-
-    size_t group_cnt = 0;
-    size_t args_cnt = 0;
-    size_t args_sz = 0;
-    char **args = NULL;
-    char *arg_start = NULL;
-
-    bool new_group = true;
-    bool new_cmd = true;
-
-    bool redirect_in = false;
-    bool redirect_out = false;
-
-    jt_shell_cmd_t *cur_cmd = NULL;
-
-    jt_shell_tokenize_type_t token;
+    memset(&jt_shell_tokenize_ctx, 0, sizeof(jt_shell_tokenize_ctx));
+    jt_shell_tokenize_ctx.cmds = calloc(sizeof(jt_shell_cmds_t), 1);
+    jt_shell_tokenize_ctx.cmds->cmds = malloc(JT_SHELL_CMDS_COUNT * sizeof(jt_shell_cmd_t *));
+    
+    jt_shell_tokenize_ctx.new_group = true;
+    
     do {
-        if (new_group) {
-            new_cmd = true;
-            group_cnt++;
-            cur_cmd = malloc(sizeof(jt_shell_cmd_t));
-            cmds->cmds[group_cnt - 1] = cur_cmd;
-            cur_cmd->prev = NULL;
-            cur_cmd->next = NULL;
+        if (jt_shell_tokenize_ctx.new_group) {
+            jt_shell_tokenize_ctx.new_cmd = true;
+            jt_shell_tokenize_ctx.group_cnt++;
+            jt_shell_tokenize_ctx.cur_cmd = malloc(sizeof(jt_shell_cmd_t));
+            jt_shell_tokenize_ctx.cmds->cmds[jt_shell_tokenize_ctx.group_cnt - 1] = jt_shell_tokenize_ctx.cur_cmd;
+            jt_shell_tokenize_ctx.cur_cmd->prev = NULL;
+            jt_shell_tokenize_ctx.cur_cmd->next = NULL;
         }
-        if (new_cmd) {
-            if (!new_group) {
-                cur_cmd->next = malloc(sizeof(jt_shell_cmd_t));
-                ((jt_shell_cmd_t *)cur_cmd->next)->prev = cur_cmd;
-                cur_cmd = cur_cmd->next;
-                cur_cmd->next = NULL;
+        if (jt_shell_tokenize_ctx.new_cmd) {
+            if (!jt_shell_tokenize_ctx.new_group) {
+                jt_shell_tokenize_ctx.cur_cmd->next = malloc(sizeof(jt_shell_cmd_t));
+                ((jt_shell_cmd_t *)jt_shell_tokenize_ctx.cur_cmd->next)->prev = jt_shell_tokenize_ctx.cur_cmd;
+                jt_shell_tokenize_ctx.cur_cmd = jt_shell_tokenize_ctx.cur_cmd->next;
+                jt_shell_tokenize_ctx.cur_cmd->next = NULL;
             }
             
-            args_cnt = 0;
-            args_sz = JT_SHELL_ARGS_COUNT;
-            args = calloc(args_sz * sizeof(char *), 1);
+            jt_shell_tokenize_ctx.args_cnt = 0;
+            jt_shell_tokenize_ctx.args_sz = JT_SHELL_ARGS_COUNT;
+            jt_shell_tokenize_ctx.args = calloc(jt_shell_tokenize_ctx.args_sz * sizeof(char *), 1);
 
-            if (NULL == args) {
+            if (NULL == jt_shell_tokenize_ctx.args) {
                 jt_logger_log(JT_LOGGER_LEVEL_ERROR,
                             "%s\n",
                             "Args split cannot alloc");
                 return NULL;
             }
 
-            cur_cmd->tokens = args;
-            new_cmd = false;
-            new_group = false;
+            jt_shell_tokenize_ctx.cur_cmd->tokens = jt_shell_tokenize_ctx.args;
+            jt_shell_tokenize_ctx.new_cmd = false;
+            jt_shell_tokenize_ctx.new_group = false;
         }
-        char ch = *line;
-        token = jt_shell_tokenize_get_token(ch);
         
-        switch (token) {
+        jt_shell_tokenize_ctx.token = jt_shell_tokenize_get_token(*line);
+        
+        switch (jt_shell_tokenize_ctx.token) {
         case EOL:
-            if (jt_shell_tokenize_ctx.arg_active) {
-                jt_shell_tokenice_arg_end(arg_start,
-                                            cmds,
-                                            cur_cmd,
-                                            group_cnt,
-                                            &args_cnt,
-                                            &redirect_in, &redirect_out);
-            }
-            memset(&jt_shell_tokenize_ctx, 0, sizeof(jt_shell_tokenize_ctx));
+            jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
             break;
         case CHAR:
             if (!jt_shell_tokenize_ctx.arg_active) {
-                arg_start = line;
+                jt_shell_tokenize_ctx.arg_start = line;
             }
             jt_shell_tokenize_ctx.arg_active = true;
             break;
@@ -158,66 +170,36 @@ jt_shell_tokenize(char *line)
             } else {
                 jt_shell_tokenize_ctx.in_quote = true;
                 *line = '\0';
-                arg_start = line + 1;
+                jt_shell_tokenize_ctx.arg_start = line + 1;
             }
             break;
         case SPACE:
             *line = '\0';
             if (!jt_shell_tokenize_ctx.arg_active) {
-                arg_start = line + 1;
+                jt_shell_tokenize_ctx.arg_start = line + 1;
                 break;
             }
-            jt_shell_tokenice_arg_end(arg_start,
-                                      cmds,
-                                      cur_cmd,
-                                      group_cnt,
-                                      &args_cnt,
-                                      &redirect_in, &redirect_out);
-            if (args_cnt >= args_sz) {
-                args_sz += JT_SHELL_ARGS_COUNT;
-                args = realloc(args, args_sz * sizeof(char *));
-                cur_cmd->tokens = args;
-                if (NULL == args) {
-                    jt_logger_log(JT_LOGGER_LEVEL_ERROR,
-                                "%s\n",
-                                "Args split cannot realloc");
-                    return NULL;
-                }
-            }
+            jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
             jt_shell_tokenize_ctx.arg_active = false;
             break;
         case PIPE:
             *line = '\0';
-            if (jt_shell_tokenize_ctx.arg_active) {
-                jt_shell_tokenice_arg_end(arg_start,
-                                            cmds,
-                                            cur_cmd,
-                                            group_cnt,
-                                            &args_cnt,
-                                            &redirect_in, &redirect_out);
-            }
-            arg_start = line + 1;
-            new_cmd = true;
+            jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
+            jt_shell_tokenize_ctx.arg_start = line + 1;
+            jt_shell_tokenize_ctx.new_cmd = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
-                                args);
+                                jt_shell_tokenize_ctx.args);
             jt_logger_log(JT_LOGGER_LEVEL_ERROR,
                         "%s\n",
                         "new cmd");
             break;
         case SREDNIK:
             *line = '\0';
-            if (jt_shell_tokenize_ctx.arg_active) {
-                jt_shell_tokenice_arg_end(arg_start,
-                                            cmds,
-                                            cur_cmd,
-                                            group_cnt,
-                                            &args_cnt,
-                                            &redirect_in, &redirect_out);
-            }
-            arg_start = line + 1;
-            new_group = true;
+            jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
+            jt_shell_tokenize_ctx.arg_start = line + 1;
+            jt_shell_tokenize_ctx.new_group = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
-                                args);
+                                jt_shell_tokenize_ctx.args);
             jt_logger_log(JT_LOGGER_LEVEL_ERROR,
                         "%s\n",
                         "new group");
@@ -225,36 +207,22 @@ jt_shell_tokenize(char *line)
             break;
         case REDIRECT_IN:
             *line = '\0';
-            if (jt_shell_tokenize_ctx.arg_active) {
-                jt_shell_tokenice_arg_end(arg_start,
-                                            cmds,
-                                            cur_cmd,
-                                            group_cnt,
-                                            &args_cnt,
-                                            &redirect_in, &redirect_out);
-            }
-            arg_start = line + 1;
-            redirect_in = true;
+            jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
+            jt_shell_tokenize_ctx.arg_start = line + 1;
+            jt_shell_tokenize_ctx.redirect_in = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
-                                args);
+                                jt_shell_tokenize_ctx.args);
             jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
                         "%s\n",
                         "new redirect_in");
             break;
         case REDIRECT_OUT:
             *line = '\0';
-            if (jt_shell_tokenize_ctx.arg_active) {
-                jt_shell_tokenice_arg_end(arg_start,
-                                            cmds,
-                                            cur_cmd,
-                                            group_cnt,
-                                            &args_cnt,
-                                            &redirect_in, &redirect_out);
-            }
-            arg_start = line + 1;
-            redirect_out = true;
+            jt_shell_tokenice_arg_end(&jt_shell_tokenize_ctx);
+            jt_shell_tokenize_ctx.arg_start = line + 1;
+            jt_shell_tokenize_ctx.redirect_out = true;
             jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
-                                args);
+                                jt_shell_tokenize_ctx.args);
             jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
                         "%s\n",
                         "new redirect_out");
@@ -263,16 +231,16 @@ jt_shell_tokenize(char *line)
             break;
         }
         line++;
-    } while (token != EOL);
+    } while (jt_shell_tokenize_ctx.token != EOL);
 
-    cmds->group_cnt = group_cnt;
+    jt_shell_tokenize_ctx.cmds->group_cnt = jt_shell_tokenize_ctx.group_cnt;
 
     jt_logger_log_array(JT_LOGGER_LEVEL_DEBUG,
-                        args);
+                        jt_shell_tokenize_ctx.args);
 
     jt_logger_log(JT_LOGGER_LEVEL_DEBUG,
                   "%s %d\n",
-                  "Groups found", cmds->group_cnt);
+                  "Groups found", jt_shell_tokenize_ctx.cmds->group_cnt);
 
-    return cmds;
+    return jt_shell_tokenize_ctx.cmds;
 }
