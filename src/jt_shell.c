@@ -162,6 +162,7 @@ jt_shell_exec(char *line)
             status = WEXITSTATUS(status);
             jt_logger_log(JT_LOGGER_LEVEL_DEBUG, "%s: %d\n", "Status", status);
         } else if (res < 0) {
+            status = res;
             break;
         }
         group++;
@@ -206,9 +207,6 @@ jt_shell(int argc, char *argv[])
         jt_logger_log(JT_LOGGER_LEVEL_DEBUG, "%s: %s\n", "Line get line", line);
         res = jt_shell_exec(line);
         free(line);
-        if (res) {
-            exit(EXIT_FAILURE);
-        }
     }
 
     return 0;
