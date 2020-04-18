@@ -45,6 +45,8 @@ jt_shell_tokenize_get_token(char ch)
         return REDIRECT_IN;
     } else if (ch == '>' && !jt_shell_tokenize_ctx.in_quote) {
         return REDIRECT_OUT;
+    } else if (ch == '"') {
+        return QUOTE;
     }
 
     for (const char *c = delims; '\0' != *c; c++) {
@@ -150,6 +152,14 @@ jt_shell_tokenize(char *line)
             jt_shell_tokenize_ctx.arg_active = true;
             break;
         case QUOTE:
+            if (jt_shell_tokenize_ctx.in_quote) {
+                *line = '\0';
+                jt_shell_tokenize_ctx.in_quote = false;
+            } else {
+                jt_shell_tokenize_ctx.in_quote = true;
+                *line = '\0';
+                arg_start = line + 1;
+            }
             break;
         case SPACE:
             *line = '\0';
